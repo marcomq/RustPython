@@ -14,7 +14,7 @@ mod vm_new;
 mod vm_object;
 mod vm_ops;
 
-#[cfg(not(feature = "stdio"))]
+#[cfg(feature = "quiet-stdio")]
 use crate::builtins::PyNone;
 use crate::{
     AsObject, Py, PyObject, PyObjectRef, PyPayload, PyRef, PyResult,
@@ -319,20 +319,25 @@ impl VirtualMachine {
                         buf.get_attr("raw", self)?
                     };
                     raw.set_attr("name", self.ctx.new_str(format!("<{name}>")), self)?;
-                    let isatty = self.call_method(&raw, "isatty", ())?.is_true(self)?;
-                    let write_through = !buffered_stdio;
-                    let line_buffering = buffered_stdio && (isatty || fd == 2);
+                    let stdio;
+                    #[cfg(not(feature = "quiet-stdio"))]
+                    {
+                        let isatty = self.call_method(&raw, "isatty", ())?.is_true(self)?;
+                        let write_through = !buffered_stdio;
+                        let line_buffering = buffered_stdio && (isatty || fd == 2);
 
-                    let newline = if cfg!(windows) { None } else { Some("\n") };
+                        let newline = if cfg!(windows) { None } else { Some("\n") };
 
-                    #[cfg(feature = "stdio")]
-                    let stdio = self.call_method(
-                        &io,
-                        "TextIOWrapper",
-                        (buf, (), (), newline, line_buffering, write_through),
-                    )?;
-                    #[cfg(not(feature = "stdio"))]
-                    let stdio = PyNone.into_pyobject(self);
+                        stdio = self.call_method(
+                            &io,
+                            "TextIOWrapper",
+                            (buf, (), (), newline, line_buffering, write_through),
+                        )?;
+                    }
+                    #[cfg(feature = "quiet-stdio")]
+                    {
+                        stdio = PyNone.into_pyobject(self);
+                    }
                     let mode = if write { "w" } else { "r" };
                     stdio.set_attr("mode", self.ctx.new_str(mode), self)?;
 
