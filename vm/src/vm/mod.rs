@@ -299,15 +299,14 @@ impl VirtualMachine {
             #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
             {
                 let io = import::import_builtin(self, "_io")?;
-                let set_stdio = |name, _fd, _write| {                    
-                    let stdio;
-                    #[cfg(not(feature = "quiet-stdio"))]
-                    {
+                #[cfg(not(feature = "quiet-stdio"))]
+                {
+                    let set_stdio = |name, fd, write| {
                         let buffered_stdio = self.state.settings.buffered_stdio;
-                        let unbuffered = _write && !buffered_stdio;
+                        let unbuffered = write && !buffered_stdio;
                         let buf = crate::stdlib::io::open(
-                            self.ctx.new_int(_fd).into(),
-                            Some(if _write { "wb" } else { "rb" }),
+                            self.ctx.new_int(fd).into(),
+                            Some(if write { "wb" } else { "rb" }),
                             crate::stdlib::io::OpenArgs {
                                 buffering: if unbuffered { 0 } else { -1 },
                                 ..Default::default()
@@ -322,38 +321,30 @@ impl VirtualMachine {
                         raw.set_attr("name", self.ctx.new_str(format!("<{name}>")), self)?;
                         let isatty = self.call_method(&raw, "isatty", ())?.is_true(self)?;
                         let write_through = !buffered_stdio;
-                        let line_buffering = buffered_stdio && (isatty || _fd == 2);
+                        let line_buffering = buffered_stdio && (isatty || fd == 2);
 
                         let newline = if cfg!(windows) { None } else { Some("\n") };
 
-                        
-                         stdio = self.call_method(
+                        let stdio = self.call_method(
                             &io,
                             "TextIOWrapper",
                             (buf, (), (), newline, line_buffering, write_through),
                         )?;
-                        let mode = if _write { "w" } else { "r" };
+                        let mode = if write { "w" } else { "r" };
                         stdio.set_attr("mode", self.ctx.new_str(mode), self)?;
-    
-                    }                    
-                    #[cfg(feature = "quiet-stdio")]
-                    {
-                        use crate::builtins::PyNone;
-                        stdio = PyNone.into_pyobject(self);
-                    }
-                    
-                    let dunder_name = self.ctx.intern_str(format!("__{name}__"));
-                    self.sys_module.set_attr(
-                        dunder_name, // e.g. __stdin__
-                        stdio.clone(),
-                        self,
-                    )?;
-                    self.sys_module.set_attr(name, stdio, self)?;
-                    Ok(())
-                };
-                set_stdio("stdin", 0, false)?;
-                set_stdio("stdout", 1, true)?;
-                set_stdio("stderr", 2, true)?;
+                        let dunder_name = self.ctx.intern_str(format!("__{name}__"));
+                        self.sys_module.set_attr(
+                            dunder_name, // e.g. __stdin__
+                            stdio.clone(),
+                            self,
+                        )?;
+                        self.sys_module.set_attr(name, stdio, self)?;
+                        Ok(())
+                    };
+                    set_stdio("stdin", 0, false)?;
+                    set_stdio("stdout", 1, true)?;
+                    set_stdio("stderr", 2, true)?;
+                }
 
                 let io_open = io.get_attr("open", self)?;
                 self.builtins.set_attr("open", io_open, self)?;

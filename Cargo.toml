@@ -10,7 +10,7 @@ repository.workspace = true
 license.workspace = true
 
 [features]
-default = ["threading", "stdlib", "quiet-stdio", "importlib"]
+default = ["threading", "stdlib", "importlib"]
 importlib = ["rustpython-vm/importlib"]
 encodings = ["rustpython-vm/encodings"]
 quiet-stdio = ["rustpython-vm/quiet-stdio"]
