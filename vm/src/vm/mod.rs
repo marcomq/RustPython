@@ -14,6 +14,8 @@ mod vm_new;
 mod vm_object;
 mod vm_ops;
 
+#[cfg(not(feature = "stdio"))]
+use crate::builtins::PyNone;
 use crate::{
     AsObject, Py, PyObject, PyObjectRef, PyPayload, PyRef, PyResult,
     builtins::{
@@ -296,10 +298,7 @@ impl VirtualMachine {
             let importlib = import::init_importlib_base(self)?;
             self.import_utf8_encodings()?;
 
-            #[cfg(all(
-                any(not(target_arch = "wasm32"), target_os = "wasi"),
-                not(feature = "disable-stdio")
-            ))]
+            #[cfg(any(not(target_arch = "wasm32"), target_os = "wasi"))]
             {
                 let io = import::import_builtin(self, "_io")?;
                 let set_stdio = |name, fd, write| {
@@ -326,11 +325,14 @@ impl VirtualMachine {
 
                     let newline = if cfg!(windows) { None } else { Some("\n") };
 
+                    #[cfg(feature = "stdio")]
                     let stdio = self.call_method(
                         &io,
                         "TextIOWrapper",
                         (buf, (), (), newline, line_buffering, write_through),
                     )?;
+                    #[cfg(not(feature = "stdio"))]
+                    let stdio = PyNone.into_pyobject(self);
                     let mode = if write { "w" } else { "r" };
                     stdio.set_attr("mode", self.ctx.new_str(mode), self)?;
 
